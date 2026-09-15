@@ -21,7 +21,7 @@ Sunucuda `.env`:
 ```
 GOOGLE_DRIVE_FOLDER_ID=BURASI
 GOOGLE_SERVICE_ACCOUNT_FILE=/opt/nisan/service-account.json
-FRONTEND_ORIGIN=https://KULLANICI.github.io
+FRONTEND_ORIGIN=https://huseyinsetsis.github.io
 ```
 
 JSON dosyasını Ubuntu’ya kopyalayın; GitHub’a koymayın.
