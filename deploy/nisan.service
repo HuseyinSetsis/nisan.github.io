@@ -1,0 +1,18 @@
+[Unit]
+Description=Iremsu ve Huseyin nisan ani paylasimi
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/nisan
+Environment=NODE_ENV=production
+EnvironmentFile=/opt/nisan/.env
+ExecStart=/usr/bin/node server/index.js
+Restart=always
+RestartSec=3
+TimeoutStartSec=20
+
+[Install]
+WantedBy=multi-user.target
