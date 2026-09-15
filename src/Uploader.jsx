@@ -1,9 +1,9 @@
 import { useRef, useState } from 'react'
 import { prepareFile } from './compress'
-import { UPLOAD_URL } from './config'
+import { UPLOAD_URL, USE_DRIVE_SCRIPT } from './config'
 import { CameraMark } from './Ornaments'
 
-const MAX_BYTES = 100 * 1024 * 1024
+const MAX_BYTES = USE_DRIVE_SCRIPT ? 20 * 1024 * 1024 : 100 * 1024 * 1024
 
 function validate(file) {
   const type = file.type || ''
@@ -13,7 +13,11 @@ function validate(file) {
     type.startsWith('video/') ||
     /\.(jpe?g|png|webp|gif|heic|heif|bmp|mp4|mov|webm|3gp|m4v)$/i.test(name)
   if (!ok) return `${file.name} desteklenmiyor.`
-  if (file.size > MAX_BYTES) return `${file.name} 100 MB sınırının üzerinde.`
+  if (file.size > MAX_BYTES) {
+    return USE_DRIVE_SCRIPT
+      ? `${file.name} 20 MB sınırının üzerinde.`
+      : `${file.name} 100 MB sınırının üzerinde.`
+  }
   return null
 }
 
@@ -43,19 +47,21 @@ export default function Uploader() {
     setMessage('Anılar hazırlanıyor…')
 
     try {
+      if (!UPLOAD_URL) {
+        throw new Error('Drive yükleme adresi henüz eklenmedi.')
+      }
+
       const prepared = []
       for (const file of incoming) {
         prepared.push(await prepareFile(file))
       }
 
-      const form = new FormData()
-      prepared.forEach((file) => form.append('files', file))
-      form.append('guestName', guestName.trim())
-
       setStatus('uploading')
-      setMessage('Yükleniyor…')
+      setMessage('Drive’a yükleniyor…')
 
-      const count = await sendForm(form, setProgress)
+      const count = USE_DRIVE_SCRIPT
+        ? await sendToDrive(prepared, guestName.trim(), setProgress)
+        : await sendForm(toForm(prepared, guestName.trim()), setProgress)
       setStatus('success')
       setProgress(1)
       setMessage(
@@ -155,6 +161,54 @@ export default function Uploader() {
       {status === 'error' && <p className="note error">{message}</p>}
     </section>
   )
+}
+
+function toForm(files, guestName) {
+  const form = new FormData()
+  files.forEach((file) => form.append('files', file))
+  form.append('guestName', guestName)
+  return form
+}
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const value = String(reader.result)
+      resolve(value.slice(value.indexOf(',') + 1))
+    }
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
+}
+
+async function sendToDrive(files, guestName, onProgress) {
+  let done = 0
+  for (const file of files) {
+    const data = await fileToBase64(file)
+    const response = await fetch(UPLOAD_URL, {
+      method: 'POST',
+      body: JSON.stringify({
+        guestName,
+        name: file.name,
+        mime: file.type || 'application/octet-stream',
+        data,
+      }),
+    })
+    const text = await response.text()
+    let body = {}
+    try {
+      body = JSON.parse(text)
+    } catch {
+      body = {}
+    }
+    if (!response.ok || body.ok === false) {
+      throw new Error(body.error || 'Google Drive yüklemesi başarısız oldu.')
+    }
+    done += 1
+    onProgress(done / files.length)
+  }
+  return done
 }
 
 function sendForm(form, onProgress) {
